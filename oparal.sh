@@ -112,7 +112,15 @@ execute_file() {
 
 progress_monitor &
 mon_pid=$!
-trap 'kill $mon_pid 2>/dev/null; wait $mon_pid 2>/dev/null; rm -f "$progress_file"' EXIT
+
+cleanup() {
+  kill $mon_pid 2>/dev/null
+  kill $(jobs -p) 2>/dev/null
+  wait $mon_pid 2>/dev/null
+  rm -f "$progress_file"
+}
+
+trap cleanup EXIT INT TERM
 
 for dir in $(find "$root" -maxdepth 1 -type d -regex '.*/[a-z]' | sort); do
   if [ "$interactive" = "Y" ]; then
