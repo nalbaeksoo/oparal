@@ -36,7 +36,7 @@ shift $((OPTIND-1))
 # internal counters
 completed=0
 progress_file=$(mktemp)
-results="results.csv"
+results="$(date +%Y%m%d_%H%M).result.csv"
 
 echo "0" > "$progress_file"
 echo "directory,file,start,end,duration" > "$results"

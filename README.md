@@ -19,4 +19,4 @@ Options:
 
 The script scans every directory from `a` to `z` under the specified root. Files must be named like `00001-something-sh-N` or `00002-title-sql-N`. They are executed in numeric order. After completion the trailing `N` is changed to `Y`.
 
-During execution a progress line appears every 10 seconds showing completed percentage along with current CPU, memory, disk and network statistics. When finished a `results.csv` file is written containing start time, end time and duration for each file.
+During execution a progress line appears every 10 seconds showing completed percentage along with current CPU, memory, disk and network statistics. When finished a results file named `YYYYMMDD_HHMM.result.csv` is written containing start time, end time and duration for each file.
