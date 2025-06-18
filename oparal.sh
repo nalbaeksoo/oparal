@@ -30,6 +30,7 @@ Usage: $0 [options]
   -us USER  sqlplus username (default system)
   -pa PASS  sqlplus password (default manager)
   -id INSTANCE_ID  unique instance identifier (auto-generated)
+  -hist FILE  results CSV to use for task ordering
   -h  show this help
 USAGE
 }
@@ -43,6 +44,7 @@ max_processes=200
 sql_user="system"
 sql_pass="manager"
 custom_instance_id=""
+history_csv=""
 
 # Parse arguments
 while [ $# -gt 0 ]; do
@@ -56,6 +58,7 @@ while [ $# -gt 0 ]; do
     -us) sql_user=$2; shift 2;;
     -pa) sql_pass=$2; shift 2;;
     -id) custom_instance_id=$2; shift 2;;
+    -hist) history_csv=$2; shift 2;;
     -h) usage; exit 0;;
     *) usage; exit 1;;
   esac
@@ -84,17 +87,38 @@ readonly final_pid_file="${FINAL_LOCK_DIR}/${SCRIPT_NAME}.${FINAL_INSTANCE_ID}.p
 
 # Previous run durations mapping
 declare -A PREV_DURATION=()
-latest_results="$(ls -1t "${FINAL_LOG_DIR}"/*result.csv 2>/dev/null | head -n 1 || true)"
+result_files=()
+while IFS= read -r f; do
+  result_files+=("$f")
+done < <(ls -1 ${FINAL_LOG_DIR}/*.result.csv 2>/dev/null || true)
+
+best_results=""
+best_total=""
+for f in "${result_files[@]}"; do
+  total=$(awk -F, 'NR>1{sum+=$5} END{print sum+0}' "$f" 2>/dev/null)
+  if [ -z "$best_total" ] || [ "$total" -lt "$best_total" ]; then
+    best_total="$total"
+    best_results="$f"
+  fi
+done
+
+latest_results="$(ls -1t ${FINAL_LOG_DIR}/*.result.csv 2>/dev/null | head -n 1 || true)"
+selected_results=""
+if [ -n "$history_csv" ]; then
+  selected_results="$history_csv"
+else
+  selected_results="$latest_results"
+fi
 
 # Write PID file for instance tracking
 echo $$ > "$final_pid_file"
 
-if [ -n "$latest_results" ]; then
+if [ -n "$selected_results" ] && [ -f "$selected_results" ]; then
     while IFS=',' read -r d f s e dur rest; do
         [ "$d" = "directory" ] && continue
         abs="$(readlink -f "$d/$f" 2>/dev/null || echo '')"
         [ -n "$abs" ] && PREV_DURATION["$abs"]="$dur"
-    done < "$latest_results"
+    done < "$selected_results"
 fi
 
 check_running_instances() {
@@ -356,12 +380,26 @@ done
 
 task_total=${#TASKS[@]}
 
+if [ ${#result_files[@]} -gt 0 ]; then
+  echo "Available result files:" 
+  for rf in "${result_files[@]}"; do
+    t=$(awk -F, 'NR>1{sum+=$5} END{print sum+0}' "$rf" 2>/dev/null)
+    printf "  %s total:%ss\n" "$(basename "$rf")" "$t"
+  done
+  if [ -n "$best_results" ]; then
+    echo "Best total duration: ${best_total:-0}s from $(basename "$best_results")"
+  fi
+  if [ -n "$selected_results" ]; then
+    echo "Selected results file: $(basename "$selected_results")"
+  fi
+fi
+
 progress_monitor &
 mon_pid=$!
 
 use_history="n"
-if [ -n "$latest_results" ] && [ -t 0 ] && [ ${#PREV_DURATION[@]} -gt 0 ]; then
-    read -p "Reorder tasks based on previous durations? [y/N] " ans
+if [ -n "$selected_results" ] && [ -t 0 ] && [ ${#PREV_DURATION[@]} -gt 0 ]; then
+    read -p "Reorder tasks based on durations from $(basename "$selected_results")? [y/N] " ans
     case $ans in
         Y|y) use_history="y" ;;
     esac
