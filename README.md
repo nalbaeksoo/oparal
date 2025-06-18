@@ -17,8 +17,11 @@ Options:
 - `-p NN`  Maximum concurrent processes (default: 200).
 - `-us USER` SQL*Plus username (default: `system`).
 - `-pa PASS` SQL*Plus password (default: `manager`).
+- `-id ID`  Custom instance identifier. When omitted, a unique ID is auto-generated.
+- `-isolation MODE` Isolation mode: `workdir` keeps runs from different working
+  directories separate, while `global` coordinates all runs system-wide.
 - `-h`     Show help.
 
 The script scans every directory from `a` to `z` under the specified root. Files must be named like `00001-something-sh-N` or `00002-title-sql-N`. Shell files are run with `sh` while SQL files are executed via `sqlplus USER/PASS @file`. Files are processed in numeric order and after completion the trailing `N` is changed to `Y`.
 
-During execution a progress line appears every 10 seconds showing completed percentage, the number of running slave processes and how many have been forked in total, along with current CPU, memory, disk and network statistics. When finished a results file named `YYYYMMDD_HHMM_PID.result.csv` is written containing start time, end time and duration for each file. The PID ensures multiple runs from different directories do not clobber one another.
+During execution a progress line appears every 10 seconds showing completed percentage, the number of running slave processes and how many have been forked in total, along with current CPU, memory, disk and network statistics. When finished a results file named `YYYYMMDD_HHMM_INSTANCE.result.csv` is written, containing start time, end time and duration for each file. The instance identifier keeps results from concurrent runs separate.
