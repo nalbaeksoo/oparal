@@ -48,7 +48,7 @@ completed=0
 started=0
 progress_file=$(mktemp)
 started_file=$(mktemp)
-results="$(date +%Y%m%d_%H%M).result.csv"
+results="$(date +%Y%m%d_%H%M)_$$.result.csv"
 
 echo "0" > "$progress_file"
 echo "0" > "$started_file"
