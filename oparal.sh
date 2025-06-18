@@ -29,12 +29,7 @@ Usage: $0 [options]
   -us USER  sqlplus username (default system)
   -pa PASS  sqlplus password (default manager)
   -id INSTANCE_ID  unique instance identifier (auto-generated)
-  -isolation MODE  isolation mode (workdir/global) (default workdir)
   -h  show this help
-
-Isolation modes:
-  workdir - Each working directory is completely isolated
-  global  - All instances share locks regardless of working directory
 USAGE
 }
 
@@ -47,7 +42,6 @@ max_processes=200
 sql_user="system"
 sql_pass="manager"
 custom_instance_id=""
-isolation_mode="workdir"
 
 # Parse arguments
 while [ $# -gt 0 ]; do
@@ -60,17 +54,11 @@ while [ $# -gt 0 ]; do
     -us) sql_user=$2; shift 2;;
     -pa) sql_pass=$2; shift 2;;
     -id) custom_instance_id=$2; shift 2;;
-    -isolation) isolation_mode=$2; shift 2;;
     -h) usage; exit 0;;
     *) usage; exit 1;;
   esac
 done
 
-# Validate isolation mode
-if [ "$isolation_mode" != "workdir" ] && [ "$isolation_mode" != "global" ]; then
-    echo "Error: Invalid isolation mode. Use 'workdir' or 'global'" >&2
-    exit 1
-fi
 
 # Use custom instance ID if provided
 if [ -n "$custom_instance_id" ]; then
@@ -79,17 +67,10 @@ else
     readonly FINAL_INSTANCE_ID="$INSTANCE_ID"
 fi
 
-# Adjust paths based on isolation mode
-if [ "$isolation_mode" = "global" ]; then
-    readonly FINAL_LOCK_DIR="/tmp/.parallel_locks_global"
-    readonly FINAL_LOG_DIR="${WORK_DIR}/.parallel_logs"
-    readonly FINAL_GLOBAL_LOCK="/tmp/.parallel_locks_global/global.lock"
-    mkdir -p "$FINAL_LOCK_DIR"
-else
-    readonly FINAL_LOCK_DIR="$LOCK_DIR"
-    readonly FINAL_LOG_DIR="$LOG_DIR"
-    readonly FINAL_GLOBAL_LOCK="$GLOBAL_LOCK"
-fi
+# Paths for this working directory
+readonly FINAL_LOCK_DIR="$LOCK_DIR"
+readonly FINAL_LOG_DIR="$LOG_DIR"
+readonly FINAL_GLOBAL_LOCK="$GLOBAL_LOCK"
 
 # Instance-specific files
 readonly results="${FINAL_LOG_DIR}/$(date +%Y%m%d_%H%M)_${FINAL_INSTANCE_ID}.result.csv"
@@ -105,7 +86,6 @@ echo $$ > "$final_pid_file"
 check_running_instances() {
     local count=0
     echo "=== Running Instances ==="
-    echo "Isolation mode: $isolation_mode"
     echo "Work directory: $WORK_DIR"
     echo "Lock directory: $FINAL_LOCK_DIR"
     echo "Checking pattern: ${FINAL_LOCK_DIR}/${SCRIPT_NAME}.*.pid"
@@ -166,21 +146,6 @@ unmark_file_processing() {
     rm -f "$file_lock"
 }
 
-get_total_script_processes() {
-    local total=0
-    for pid_file in "${FINAL_LOCK_DIR}"/${SCRIPT_NAME}.*.pid; do
-        [ -f "$pid_file" ] || continue
-        local pid
-        pid=$(cat "$pid_file" 2>/dev/null || echo "")
-        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-            local children
-            children=$(pgrep -P "$pid" 2>/dev/null | wc -l)
-            total=$((total + children))
-        fi
-    done
-    echo "$total"
-}
-
 get_workdir_script_processes() {
     local total=0
     for pid_file in "${FINAL_LOCK_DIR}"/${SCRIPT_NAME}.*.pid; do
@@ -211,7 +176,6 @@ get_mem_usage() {
 progress_monitor() {
     echo "Starting progress monitor for instance: $FINAL_INSTANCE_ID"
     echo "Work directory: $WORK_DIR"
-    echo "Isolation mode: $isolation_mode"
     local total
     total=$(find "$root_dir" -maxdepth 2 -type f \( -name '*-sh-N' -o -name '*-sql-N' \) 2>/dev/null | wc -l)
     while true; do
@@ -224,19 +188,11 @@ progress_monitor() {
         mem=$(get_mem_usage)
         running=$(jobs -r 2>/dev/null | wc -l)
         running=$(( running > 0 ? running-1 : 0 ))
-        if [ "$isolation_mode" = "workdir" ]; then
-            workdir_procs=$(get_workdir_script_processes)
-            printf "[%s] Progress: %d/%d (%d%%) CPU:%d%% MEM:%d%% Local:%d WorkDir:%d ERR:%d\n" \
-                   "$FINAL_INSTANCE_ID" "$completed" "$total" \
-                   "$([ "$total" -gt 0 ] && echo $(( completed * 100 / total )) || echo "100")" \
-                   "$cpu" "$mem" "$running" "$workdir_procs" "$errors"
-        else
-            total_procs=$(get_total_script_processes)
-            printf "[%s] Progress: %d/%d (%d%%) CPU:%d%% MEM:%d%% Local:%d Global:%d ERR:%d\n" \
-                   "$FINAL_INSTANCE_ID" "$completed" "$total" \
-                   "$([ "$total" -gt 0 ] && echo $(( completed * 100 / total )) || echo "100")" \
-                   "$cpu" "$mem" "$running" "$total_procs" "$errors"
-        fi
+        workdir_procs=$(get_workdir_script_processes)
+        printf "[%s] Progress: %d/%d (%d%%) CPU:%d%% MEM:%d%% Local:%d WorkDir:%d ERR:%d\n" \
+               "$FINAL_INSTANCE_ID" "$completed" "$total" \
+               "$([ "$total" -gt 0 ] && echo $(( completed * 100 / total )) || echo "100")" \
+               "$cpu" "$mem" "$running" "$workdir_procs" "$errors"
     done
 }
 
@@ -306,7 +262,6 @@ cleanup() {
         fi
         printf '\n=== INSTANCE %s SUMMARY ===\n' "$FINAL_INSTANCE_ID"
         printf 'Work directory: %s\n' "$WORK_DIR"
-        printf 'Isolation mode: %s\n' "$isolation_mode"
         printf 'Total completed: %d\n' "$total_completed"
         printf 'Total errors: %d\n' "$total_errors"
         printf 'Results: %s\n' "$results"
@@ -392,11 +347,7 @@ for dir in $(find "$root_dir" -maxdepth 1 -type d -regex '.*/[a-z]' | sort); do
             mem=$(get_mem_usage)
             running=$(jobs -r 2>/dev/null | wc -l)
             running=$(( running > 0 ? running-1 : 0 ))
-            if [ "$isolation_mode" = "workdir" ]; then
-                limit_procs=$(get_workdir_script_processes)
-            else
-                limit_procs=$(get_total_script_processes)
-            fi
+            limit_procs=$(get_workdir_script_processes)
             if [ "$cpu" -lt "$cpu_threshold" ] && \
                [ "$mem" -lt "$mem_threshold" ] && \
                [ "$running" -lt "$max_processes" ] && \

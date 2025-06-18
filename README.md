@@ -18,8 +18,6 @@ Options:
 - `-us USER` SQL*Plus username (default: `system`).
 - `-pa PASS` SQL*Plus password (default: `manager`).
 - `-id ID`  Custom instance identifier. When omitted, a unique ID is auto-generated.
-- `-isolation MODE` Isolation mode: `workdir` keeps runs from different working
-  directories separate, while `global` coordinates all runs system-wide.
 - `-h`     Show help.
 
 The script scans every directory from `a` to `z` under the specified root. Files must be named like `00001-something-sh-N` or `00002-title-sql-N`. Shell files are run with `sh` while SQL files are executed via `sqlplus USER/PASS @file`. Files are processed in numeric order and after completion the trailing `N` is changed to `Y`.
