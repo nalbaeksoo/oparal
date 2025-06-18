@@ -26,6 +26,7 @@ Usage: $0 [options]
   -d  root directory containing a-z subdirectories (default ./)
   -i  interactive mode (Y ask each dir, A process all without asking)
   -p  maximum concurrent processes (default 200)
+  -op N  number of slave processes to run in parallel (alias for -p)
   -us USER  sqlplus username (default system)
   -pa PASS  sqlplus password (default manager)
   -id INSTANCE_ID  unique instance identifier (auto-generated)
@@ -51,6 +52,7 @@ while [ $# -gt 0 ]; do
     -d) root_dir=$2; shift 2;;
     -i) interactive_mode=$2; shift 2;;
     -p) max_processes=$2; shift 2;;
+    -op) max_processes=$2; shift 2;;
     -us) sql_user=$2; shift 2;;
     -pa) sql_pass=$2; shift 2;;
     -id) custom_instance_id=$2; shift 2;;

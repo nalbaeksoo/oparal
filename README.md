@@ -15,6 +15,7 @@ Options:
 - `-d DIR` Root directory containing `a`..`z` subdirectories (default: `./`).
 - `-i MODE` Interactive mode. `Y` asks before processing each directory, `A` runs all directories without prompts (default: `Y`). When standard input is not a terminal (for example when running with `nohup`), mode automatically becomes `A`.
 - `-p NN`  Maximum concurrent processes (default: 200).
+- `-op NN` Number of slave processes to run in parallel. Use `1` for serial execution.
 - `-us USER` SQL*Plus username (default: `system`).
 - `-pa PASS` SQL*Plus password (default: `manager`).
 - `-id ID`  Custom instance identifier. When omitted, a unique ID is auto-generated.
