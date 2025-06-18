@@ -124,7 +124,7 @@ check_running_instances() {
     done
     echo "Total active instances: $count"
     echo "========================="
-    return $count
+    return 0
 }
 
 is_file_being_processed() {
@@ -301,7 +301,9 @@ cleanup() {
         local total_completed total_errors
         total_completed=$(wc -l < "$results" 2>/dev/null || echo "1")
         total_completed=$((total_completed - 1))
-        total_errors=$(grep -c "FAILED" "$results" 2>/dev/null || echo "0")
+        if ! total_errors=$(grep -c "FAILED" "$results" 2>/dev/null); then
+            total_errors=0
+        fi
         printf '\n=== INSTANCE %s SUMMARY ===\n' "$FINAL_INSTANCE_ID"
         printf 'Work directory: %s\n' "$WORK_DIR"
         printf 'Isolation mode: %s\n' "$isolation_mode"
@@ -386,7 +388,6 @@ for dir in $(find "$root_dir" -maxdepth 1 -type d -regex '.*/[a-z]' | sort); do
             continue
         fi
         while true; do
-            local cpu mem running limit_procs
             cpu=$(get_cpu_usage)
             mem=$(get_mem_usage)
             running=$(jobs -r 2>/dev/null | wc -l)
@@ -404,7 +405,6 @@ for dir in $(find "$root_dir" -maxdepth 1 -type d -regex '.*/[a-z]' | sort); do
             fi
             sleep 1
         done
-        local started
         started=$(cat "$started_file" 2>/dev/null || echo "0")
         echo $((started + 1)) > "$started_file"
         execute_file "$f" &
