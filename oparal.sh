@@ -27,6 +27,7 @@ Usage: $0 [options]
   -i  interactive mode (Y ask each dir, A process all without asking)
   -p  maximum concurrent processes (default 200)
   -us USER  sqlplus username (default system)
+  -pa PASS  sqlplus password (default manager)
   -id INSTANCE_ID  unique instance identifier (auto-generated)
   -isolation MODE  isolation mode (workdir/global) (default workdir)
   -h  show this help
@@ -38,25 +39,26 @@ USAGE
 }
 
 # Default values
-cpu_limit=85
-mem_limit=80
-root="./"
-interactive="Y"
-max_proc=200
+cpu_threshold=85
+mem_threshold=80
+root_dir="./"
+interactive_mode="Y"
+max_processes=200
 sql_user="system"
-sql_pass=""
+sql_pass="manager"
 custom_instance_id=""
 isolation_mode="workdir"
 
 # Parse arguments
 while [ $# -gt 0 ]; do
   case "$1" in
-    -c) cpu_limit=$2; shift 2;;
-    -m) mem_limit=$2; shift 2;;
-    -d) root=$2; shift 2;;
-    -i) interactive=$2; shift 2;;
-    -p) max_proc=$2; shift 2;;
+    -c) cpu_threshold=$2; shift 2;;
+    -m) mem_threshold=$2; shift 2;;
+    -d) root_dir=$2; shift 2;;
+    -i) interactive_mode=$2; shift 2;;
+    -p) max_processes=$2; shift 2;;
     -us) sql_user=$2; shift 2;;
+    -pa) sql_pass=$2; shift 2;;
     -id) custom_instance_id=$2; shift 2;;
     -isolation) isolation_mode=$2; shift 2;;
     -h) usage; exit 0;;
@@ -211,7 +213,7 @@ progress_monitor() {
     echo "Work directory: $WORK_DIR"
     echo "Isolation mode: $isolation_mode"
     local total
-    total=$(find "$root" -maxdepth 2 -type f \( -name '*-sh-N' -o -name '*-sql-N' \) 2>/dev/null | wc -l)
+    total=$(find "$root_dir" -maxdepth 2 -type f \( -name '*-sh-N' -o -name '*-sql-N' \) 2>/dev/null | wc -l)
     while true; do
         sleep 10
         local completed forked errors cpu mem running workdir_procs total_procs
@@ -311,25 +313,28 @@ cleanup() {
 }
 
 validate_inputs() {
-    if [[ ! "$cpu_limit" =~ ^[0-9]+$ ]] || [ "$cpu_limit" -lt 1 ] || [ "$cpu_limit" -gt 100 ]; then
+    if [[ ! "$cpu_threshold" =~ ^[0-9]+$ ]] || [ "$cpu_threshold" -lt 1 ] || [ "$cpu_threshold" -gt 100 ]; then
         echo "Error: CPU limit must be 1-100" >&2
         exit 1
     fi
-    if [[ ! "$mem_limit" =~ ^[0-9]+$ ]] || [ "$mem_limit" -lt 1 ] || [ "$mem_limit" -gt 100 ]; then
+    if [[ ! "$mem_threshold" =~ ^[0-9]+$ ]] || [ "$mem_threshold" -lt 1 ] || [ "$mem_threshold" -gt 100 ]; then
         echo "Error: Memory limit must be 1-100" >&2
         exit 1
     fi
-    if [ ! -d "$root" ]; then
-        echo "Error: Directory '$root' does not exist" >&2
+    if [ ! -d "$root_dir" ]; then
+        echo "Error: Directory '$root_dir' does not exist" >&2
         exit 1
     fi
-    if [[ ! "$max_proc" =~ ^[0-9]+$ ]] || [ "$max_proc" -lt 1 ]; then
+    if [[ ! "$max_processes" =~ ^[0-9]+$ ]] || [ "$max_processes" -lt 1 ]; then
         echo "Error: Max processes must be a positive integer" >&2
         exit 1
     fi
 }
 
 get_password() {
+    if [ -n "$sql_pass" ]; then
+        return
+    fi
     if [ -n "${SQL_PASSWORD:-}" ]; then
         sql_pass="$SQL_PASSWORD"
     elif [ -f "${HOME}/.sqlpass" ]; then
@@ -353,8 +358,8 @@ echo "0" > "$started_file"
 echo "0" > "$error_file"
 echo "directory,file,start,end,duration,status,instance,workdir" > "$results"
 
-if [ ! -t 0 ] && [ "$interactive" = "Y" ]; then
-    interactive="A"
+if [ ! -t 0 ] && [ "$interactive_mode" = "Y" ]; then
+    interactive_mode="A"
 fi
 
 trap cleanup EXIT INT TERM
@@ -364,13 +369,13 @@ check_running_instances
 progress_monitor &
 mon_pid=$!
 
-for dir in $(find "$root" -maxdepth 1 -type d -regex '.*/[a-z]' | sort); do
-    if [ "$interactive" = "Y" ]; then
+for dir in $(find "$root_dir" -maxdepth 1 -type d -regex '.*/[a-z]' | sort); do
+    if [ "$interactive_mode" = "Y" ]; then
         read -p "Process directory $(basename "$dir")? [Y/N/A] " ans
         case $ans in
             Y|y) ;;
             N|n) continue ;;
-            A|a) interactive="A" ;;
+            A|a) interactive_mode="A" ;;
             *) continue ;;
         esac
     fi
@@ -391,10 +396,10 @@ for dir in $(find "$root" -maxdepth 1 -type d -regex '.*/[a-z]' | sort); do
             else
                 limit_procs=$(get_total_script_processes)
             fi
-            if [ "$cpu" -lt "$cpu_limit" ] && \
-               [ "$mem" -lt "$mem_limit" ] && \
-               [ "$running" -lt "$max_proc" ] && \
-               [ "$limit_procs" -lt $((max_proc * 2)) ]; then
+            if [ "$cpu" -lt "$cpu_threshold" ] && \
+               [ "$mem" -lt "$mem_threshold" ] && \
+               [ "$running" -lt "$max_processes" ] && \
+               [ "$limit_procs" -lt $((max_processes * 2)) ]; then
                 break
             fi
             sleep 1
