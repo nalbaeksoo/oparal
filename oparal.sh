@@ -45,10 +45,13 @@ fi
 
 # internal counters
 completed=0
+started=0
 progress_file=$(mktemp)
+started_file=$(mktemp)
 results="$(date +%Y%m%d_%H%M).result.csv"
 
 echo "0" > "$progress_file"
+echo "0" > "$started_file"
 echo "directory,file,start,end,duration" > "$results"
 
 get_cpu_usage() {
@@ -73,6 +76,7 @@ progress_monitor() {
   while true; do
     sleep 10
     completed=$(cat "$progress_file")
+    forked=$(cat "$started_file")
     cpu=$(get_cpu_usage)
     mem=$(get_mem_usage)
     disk=$(get_disk_usage)
@@ -87,7 +91,7 @@ progress_monitor() {
     else
       progress=100
     fi
-    echo "Progress: $completed/$total (${progress}%) CPU:${cpu}% MEM:${mem}% DISK:${disk} NET:${rx}/${tx} RUN:${running}"
+    echo "Progress: $completed/$total (${progress}%) CPU:${cpu}% MEM:${mem}% DISK:${disk} NET:${rx}/${tx} RUN:${running} FORK:${forked}"
   done
 }
 
@@ -117,7 +121,7 @@ cleanup() {
   kill $mon_pid 2>/dev/null
   kill $(jobs -p) 2>/dev/null
   wait $mon_pid 2>/dev/null
-  rm -f "$progress_file"
+  rm -f "$progress_file" "$started_file"
 }
 
 trap cleanup EXIT INT TERM
@@ -147,6 +151,8 @@ for dir in $(find "$root" -maxdepth 1 -type d -regex '.*/[a-z]' | sort); do
       fi
       sleep 1
     done
+    started=$((started+1))
+    echo "$started" > "$started_file"
     execute_file "$f" &
   done
   wait
