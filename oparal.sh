@@ -159,6 +159,6 @@ for dir in $(find "$root" -maxdepth 1 -type d -regex '.*/[a-z]' | sort); do
 done
 
 wait
-kill $mon_pid
+kill "$mon_pid" 2>/dev/null
 
 printf '\nResults written to %s\n' "$results"
