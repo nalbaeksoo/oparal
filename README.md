@@ -27,3 +27,5 @@ The script scans every directory from `a` to `z` under the specified root. Files
 During execution a progress line appears every 10 seconds showing completed percentage, the number of running slave processes and how many have been forked in total, along with current CPU, memory, disk and network statistics. When finished a results file named `YYYYMMDD_HHMM_INSTANCE.result.csv` is written, containing start time, end time and duration for each file. The instance identifier keeps results from concurrent runs separate.
 
 If result files exist in `.parallel_logs`, the script lists each file and indicates which one achieved the shortest total duration. It then asks whether to reorder tasks using the selected results file (either the one given with `-hist` or the latest file).
+
+Pressing `Ctrl+C` stops the script and all slave processes thanks to a cleanup routine that kills each background job and the progress monitor.
