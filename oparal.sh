@@ -207,8 +207,8 @@ get_workdir_script_processes() {
 
 get_instance_processes() {
   local cnt
-  cnt=$(jobs -rp | wc -l)
-  if [ -n "${mon_pid:-}" ]; then
+  cnt=$(pgrep -P "$MAIN_PID" | wc -l)
+  if [ -n "${mon_pid:-}" ] && kill -0 "$mon_pid" 2>/dev/null; then
     cnt=$((cnt > 0 ? cnt-1 : 0))
   fi
   echo "$cnt"
