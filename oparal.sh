@@ -243,11 +243,11 @@ execute_file() {
     mark_file_processing "$f"
     local start end dur status=SUCCESS new
     start=$(date +%s)
-    echo "[start] $f (instance: $FINAL_INSTANCE_ID, workdir: $WORK_DIR)" | tee -a "$error_log"
+    echo "[start] $f (instance: $FINAL_INSTANCE_ID, workdir: $WORK_DIR)" >> "$error_log"
     if [[ "$f" == *-sql-* ]]; then
         if ! sqlplus -S "$sql_user/$sql_pass" < "$f" > /dev/null 2>>"$error_log"; then
             status=FAILED
-            echo "[error] SQL execution failed for $f" | tee -a "$error_log"
+            echo "[error] SQL execution failed for $f" >> "$error_log"
             local errors
             errors=$(cat "$error_file" 2>/dev/null || echo "0")
             echo $((errors + 1)) > "$error_file"
@@ -255,7 +255,7 @@ execute_file() {
     else
         if ! sh "$f" 2>>"$error_log"; then
             status=FAILED
-            echo "[error] Shell execution failed for $f" | tee -a "$error_log"
+            echo "[error] Shell execution failed for $f" >> "$error_log"
             local errors
             errors=$(cat "$error_file" 2>/dev/null || echo "0")
             echo $((errors + 1)) > "$error_file"
@@ -267,10 +267,10 @@ execute_file() {
         flock -x 200
         new="${f%?}Y"
         if [ -f "$f" ] && ! mv "$f" "$new" 2>>"$error_log"; then
-            echo "[warning] Could not rename $f to $new" | tee -a "$error_log"
+            echo "[warning] Could not rename $f to $new" >> "$error_log"
         fi
     ) 200>"$FINAL_GLOBAL_LOCK"
-    echo "[done] $f (${dur}s) - $status (instance: $FINAL_INSTANCE_ID)" | tee -a "$error_log"
+    echo "[done] $f (${dur}s) - $status (instance: $FINAL_INSTANCE_ID)" >> "$error_log"
     (
         flock -x 200
         echo "$(dirname "$f"),$(basename "$f"),$(date -d @$start +%F\ %T),$(date -d @$end +%F\ %T),$dur,$status,$FINAL_INSTANCE_ID,$WORK_DIR" >> "$results"
