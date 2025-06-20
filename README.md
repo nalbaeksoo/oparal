@@ -13,7 +13,7 @@ Options:
 - `-c NN`  CPU usage threshold percentage. New tasks start while usage is below this value (default: 85).
 - `-m NN`  Memory usage threshold percentage. New tasks start while usage is below this value (default: 80).
 - `-d DIR` Root directory containing `a`..`z` subdirectories (default: `./`).
-- `-i MODE` Interactive mode. `Y` asks before processing each directory, `A` runs all directories without prompts (default: `Y`). When standard input is not a terminal (for example when running with `nohup`), mode automatically becomes `A`.
+- `-i MODE` Interactive mode. `Y` asks before processing each directory, `A` runs all directories without prompts (default: `Y`). When interactive mode is used the script completes all tasks in that directory before prompting for the next. When standard input is not a terminal (for example when running with `nohup`), mode automatically becomes `A`.
 - `-p NN`  Maximum concurrent processes (default: 200).
 - `-op NN` Number of slave processes to run in parallel. Use `1` for serial execution.
 - `-us USER` SQL*Plus username (default: `system`).

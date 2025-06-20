@@ -84,6 +84,7 @@ readonly progress_file="${FINAL_LOCK_DIR}/progress_${FINAL_INSTANCE_ID}"
 readonly started_file="${FINAL_LOCK_DIR}/started_${FINAL_INSTANCE_ID}"
 readonly error_file="${FINAL_LOCK_DIR}/errors_${FINAL_INSTANCE_ID}"
 readonly final_pid_file="${FINAL_LOCK_DIR}/${SCRIPT_NAME}.${FINAL_INSTANCE_ID}.pid"
+readonly total_file="${FINAL_LOCK_DIR}/total_${FINAL_INSTANCE_ID}"
 
 # Previous run durations mapping
 declare -A PREV_DURATION=()
@@ -214,10 +215,10 @@ get_mem_usage() {
 progress_monitor() {
     echo "Starting progress monitor for instance: $FINAL_INSTANCE_ID"
     echo "Work directory: $WORK_DIR"
-    local total="$task_total"
     while true; do
         sleep 10
-        local completed forked errors cpu mem running workdir_procs total_procs
+        local total completed forked errors cpu mem running workdir_procs
+        total=$(cat "$total_file" 2>/dev/null || echo "0")
         completed=$(cat "$progress_file" 2>/dev/null || echo "0")
         forked=$(cat "$started_file" 2>/dev/null || echo "0")
         errors=$(cat "$error_file" 2>/dev/null || echo "0")
@@ -287,7 +288,7 @@ cleanup() {
     fi
     jobs -p | xargs -r kill 2>/dev/null || true
     wait 2>/dev/null || true
-    rm -f "$progress_file" "$started_file" "$error_file" "${results}.lock"
+    rm -f "$progress_file" "$started_file" "$error_file" "$total_file" "${results}.lock"
     rm -f "${FINAL_LOCK_DIR}"/file_${FINAL_INSTANCE_ID}_*.lock
     rm -f "$final_pid_file"
     if [ -f "$results" ]; then
@@ -350,6 +351,7 @@ get_password
 echo "0" > "$progress_file"
 echo "0" > "$started_file"
 echo "0" > "$error_file"
+echo "0" > "$total_file"
 echo "directory,file,start,end,duration,status,instance,workdir" > "$results"
 
 if [ ! -t 0 ] && [ "$interactive_mode" = "Y" ]; then
@@ -361,27 +363,11 @@ trap cleanup EXIT INT TERM
 check_running_instances
 
 # Gather task list
-TASKS=()
-for dir in $(find "$root_dir" -maxdepth 1 -type d -regex '.*/[a-z]' | sort); do
-    if [ "$interactive_mode" = "Y" ]; then
-        read -p "Process directory $(basename "$dir")? [Y/N/A] " ans
-        case $ans in
-            Y|y) ;;
-            N|n) continue ;;
-            A|a) interactive_mode="A" ;;
-            *) continue ;;
-        esac
-    fi
-    while IFS= read -r -d '' f; do
-        [[ "$f" == *-Y ]] && continue
-        TASKS+=("$f")
-    done < <(find "$dir" -maxdepth 1 -type f \( -name '*-sh-*' -o -name '*-sql-*' \) -print0 2>/dev/null | sort -z)
-done
-
-task_total=${#TASKS[@]}
+# Prepare dynamic task counter
+echo "0" > "$total_file"
 
 if [ ${#result_files[@]} -gt 0 ]; then
-  echo "Available result files:" 
+  echo "Available result files:"
   for rf in "${result_files[@]}"; do
     t=$(awk -F, 'NR>1{sum+=$5} END{print sum+0}' "$rf" 2>/dev/null)
     printf "  %s total:%ss\n" "$(basename "$rf")" "$t"
@@ -405,40 +391,65 @@ if [ -n "$selected_results" ] && [ -t 0 ] && [ ${#PREV_DURATION[@]} -gt 0 ]; the
     esac
 fi
 
-if [ "$use_history" = "y" ]; then
-    mapfile -t TASKS < <(
-        for f in "${TASKS[@]}"; do
-            abs="$(readlink -f "$f")"
-            dur="${PREV_DURATION[$abs]:-0}"
-            printf '%010d:%s\n' "$dur" "$f"
-        done | sort -t: -k1,1nr | cut -d: -f2-
-    )
-fi
+for dir in $(find "$root_dir" -maxdepth 1 -type d -regex '.*/[a-z]' | sort); do
+    if [ "$interactive_mode" = "Y" ]; then
+        read -p "Process directory $(basename "$dir")? [Y/N/A] " ans
+        case $ans in
+            Y|y) ;;
+            N|n) continue ;;
+            A|a) interactive_mode="A" ;;
+            *) continue ;;
+        esac
+    fi
 
-for f in "${TASKS[@]}"; do
-    if is_file_being_processed "$f"; then
-        echo "[skip] $(basename "$f") (locked by another instance)"
+    DIR_TASKS=()
+    while IFS= read -r -d '' f; do
+        [[ "$f" == *-Y ]] && continue
+        DIR_TASKS+=("$f")
+    done < <(find "$dir" -maxdepth 1 -type f \( -name '*-sh-*' -o -name '*-sql-*' \) -print0 2>/dev/null | sort -z)
+
+    if [ ${#DIR_TASKS[@]} -eq 0 ]; then
         continue
     fi
-    while true; do
-        cpu=$(get_cpu_usage)
-        mem=$(get_mem_usage)
-        running=$(jobs -r 2>/dev/null | wc -l)
-        running=$(( running > 0 ? running-1 : 0 ))
-        limit_procs=$(get_workdir_script_processes)
-        if [ "$cpu" -lt "$cpu_threshold" ] && \
-           [ "$mem" -lt "$mem_threshold" ] && \
-           [ "$running" -lt "$max_processes" ] && \
-           [ "$limit_procs" -le $((max_processes * 2)) ]; then
-            break
+
+    curr_total=$(cat "$total_file" 2>/dev/null || echo "0")
+    echo $((curr_total + ${#DIR_TASKS[@]})) > "$total_file"
+
+    if [ "$use_history" = "y" ]; then
+        mapfile -t DIR_TASKS < <(
+            for f in "${DIR_TASKS[@]}"; do
+                abs="$(readlink -f "$f")"
+                dur="${PREV_DURATION[$abs]:-0}"
+                printf '%010d:%s\n' "$dur" "$f"
+            done | sort -t: -k1,1nr | cut -d: -f2-
+        )
+    fi
+
+    for f in "${DIR_TASKS[@]}"; do
+        if is_file_being_processed "$f"; then
+            echo "[skip] $(basename "$f") (locked by another instance)"
+            continue
         fi
-        sleep 1
+        while true; do
+            cpu=$(get_cpu_usage)
+            mem=$(get_mem_usage)
+            running=$(jobs -r 2>/dev/null | wc -l)
+            running=$(( running > 0 ? running-1 : 0 ))
+            limit_procs=$(get_workdir_script_processes)
+            if [ "$cpu" -lt "$cpu_threshold" ] && \
+               [ "$mem" -lt "$mem_threshold" ] && \
+               [ "$running" -lt "$max_processes" ] && \
+               [ "$limit_procs" -le $((max_processes * 2)) ]; then
+                break
+            fi
+            sleep 1
+        done
+        started=$(cat "$started_file" 2>/dev/null || echo "0")
+        echo $((started + 1)) > "$started_file"
+        execute_file "$f" &
+        sleep 0.5
     done
-    started=$(cat "$started_file" 2>/dev/null || echo "0")
-    echo $((started + 1)) > "$started_file"
-    execute_file "$f" &
-    sleep 0.5
+    wait
 done
 
-wait
 echo "Instance $FINAL_INSTANCE_ID completed (workdir: $WORK_DIR)."
