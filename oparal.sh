@@ -251,7 +251,7 @@ progress_monitor() {
         mem=$(get_mem_usage)
         running=$(get_instance_processes)
         workdir_procs=$(get_workdir_script_processes)
-        printf "[%s] Progress: %d/%d (%d%%) CPU:%d%% MEM:%d%% Local:%d WorkDir:%d ERR:%d\n" \
+        printf "[%s] Progress: %d/%d (%d%%) CPU:%.1f%% MEM:%d%% Local:%d WorkDir:%d ERR:%d\n" \
                "$FINAL_INSTANCE_ID" "$completed" "$total" \
                "$([ "$total" -gt 0 ] && echo $(( completed * 100 / total )) || echo "100")" \
                "$cpu" "$mem" "$running" "$workdir_procs" "$errors"
@@ -474,10 +474,11 @@ for dir in $(find "$root_dir" -maxdepth 1 -type d -regex '.*/[a-z]' | sort); do
         fi
         while true; do
             cpu=$(get_cpu_usage)
+            cpu_int=${cpu%.*}
             mem=$(get_mem_usage)
             running=$(get_instance_processes)
             limit_procs=$(get_workdir_script_processes)
-            if [ "$cpu" -lt "$cpu_threshold" ] && \
+            if [ "$cpu_int" -lt "$cpu_threshold" ] && \
                [ "$mem" -lt "$mem_threshold" ] && \
                [ "$running" -lt "$max_processes" ] && \
                [ "$limit_procs" -le $((max_processes * 2)) ]; then
