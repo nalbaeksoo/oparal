@@ -22,7 +22,7 @@ Options:
 - `-hist FILE` Results CSV to base task ordering on. Defaults to the most recent file.
 - `-h`     Show help.
 
-The script scans every directory from `a` to `z` under the specified root. Files must be named like `00001-something-sh-N` or `00002-title-sql-N`. Shell files are run with `sh` while SQL files are executed via `sqlplus USER/PASS @file`. Files are processed in numeric order and after completion the trailing `N` is changed to `Y`.
+The script scans every directory from `a` to `z` under the specified root. Files must be named like `00001-something-sh-N` or `00002-title-sql-N`. Shell files are run with `sh file` while SQL files are executed using `sqlplus USER/PASS < file`. Files are processed in numeric order and after completion the trailing `N` is changed to `Y`.
 
 During execution a progress line appears every 10 seconds showing completed percentage, the number of running slave processes and how many have been forked in total, along with current CPU, memory, disk and network statistics. When finished a results file named `YYYYMMDD_HHMM_INSTANCE.result.csv` is written, containing start time, end time and duration for each file. The instance identifier keeps results from concurrent runs separate.
 
