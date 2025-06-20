@@ -206,10 +206,12 @@ get_workdir_script_processes() {
 }
 
 get_instance_processes() {
-    local cnt
-    cnt=$(pgrep -P "$MAIN_PID" 2>/dev/null | wc -l)
+  local cnt
+  cnt=$(jobs -rp | wc -l)
+  if [ -n "${mon_pid:-}" ]; then
     cnt=$((cnt > 0 ? cnt-1 : 0))
-    echo "$cnt"
+  fi
+  echo "$cnt"
 }
 
 get_cpu_usage() {
