@@ -214,29 +214,22 @@ get_instance_processes() {
   echo "$cnt"
 }
 
-get_cpu_usage() {
-  local l1 l2 idle1 idle2 total1 total2 diff_idle diff_total
-  read -r l1 < /proc/stat || { echo 0; return; }
-  sleep 0.1
-  read -r l2 < /proc/stat || { echo 0; return; }
-  idle1=$(awk '{print $5}' <<< "$l1")
-  idle2=$(awk '{print $5}' <<< "$l2")
-  total1=$(awk '{for(i=2;i<=NF;i++) s+=$i; print s}' <<< "$l1")
-  total2=$(awk '{for(i=2;i<=NF;i++) s+=$i; print s}' <<< "$l2")
-  diff_idle=$((idle2-idle1))
-  diff_total=$((total2-total1))
-  [ "$diff_total" -le 0 ] && diff_total=1
-  local pct
-  pct=$(awk -v i=$diff_idle -v t=$diff_total 'BEGIN{printf "%.2f", (1 - i/t)*100}')
-  if [ "$pct" = "0.00" ]; then
-    echo "0.1"
-  else
-    awk -v p="$pct" 'BEGIN{printf "%.1f", p}'
-  fi
-}
-
-get_mem_usage() {
-    awk '/MemTotal/{t=$2}/MemAvailable/{a=$2}END{if(t>0) print int((t-a)/t*100); else print 0}' /proc/meminfo 2>/dev/null || echo "0"
+get_system_usage() {
+  local data line idle total used cache
+  data=$(COLUMNS=512 LC_ALL=C top -bn1 | head -n 5 2>/dev/null)
+  line=$(grep -m1 "Cpu" <<< "$data")
+  idle=$(awk -F',' '{for(i=1;i<=NF;i++) if($i~/%?id/){gsub(/[^0-9.]/,"",$(i)); idle=$(i)}} END{print idle+0}' <<< "$line")
+  cpu=$(awk -v id="$idle" 'BEGIN{printf "%.1f", 100-id}')
+  line=$(grep -m1 "Mem" <<< "$data")
+  line=$(echo "$line" | tr ',' ' ')
+  total=$(awk '{for(i=1;i<=NF;i++) if($i=="total") {print $(i-1); exit}}' <<< "$line")
+  used=$(awk '{for(i=1;i<=NF;i++) if($i=="used") {print $(i-1); exit}}' <<< "$line")
+  cache=$(awk '{for(i=1;i<=NF;i++) if($i=="buff/cache") {print $(i-1); exit}}' <<< "$line")
+  [ -z "$total" ] && total=1
+  [ -z "$used" ] && used=0
+  [ -z "$cache" ] && cache=0
+  mem=$(awk -v u="$used" -v c="$cache" -v t="$total" 'BEGIN{printf "%d", ((u+c)/t)*100}')
+  echo "$cpu $mem"
 }
 
 progress_monitor() {
@@ -249,8 +242,7 @@ progress_monitor() {
         completed=$(cat "$progress_file" 2>/dev/null || echo "0")
         forked=$(cat "$started_file" 2>/dev/null || echo "0")
         errors=$(cat "$error_file" 2>/dev/null || echo "0")
-        cpu=$(get_cpu_usage)
-        mem=$(get_mem_usage)
+        read cpu mem < <(get_system_usage)
         running=$(get_instance_processes)
         workdir_procs=$(get_workdir_script_processes)
         printf "[%s] Progress: %d/%d (%d%%) CPU:%.1f%% MEM:%d%% Local:%d WorkDir:%d ERR:%d\n" \
@@ -475,9 +467,8 @@ for dir in $(find "$root_dir" -maxdepth 1 -type d -regex '.*/[a-z]' | sort); do
             continue
         fi
         while true; do
-            cpu=$(get_cpu_usage)
+            read cpu mem < <(get_system_usage)
             cpu_int=${cpu%.*}
-            mem=$(get_mem_usage)
             running=$(get_instance_processes)
             limit_procs=$(get_workdir_script_processes)
             if [ "$cpu_int" -lt "$cpu_threshold" ] && \
