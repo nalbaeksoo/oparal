@@ -2,6 +2,7 @@
 # Work directory isolated parallel execution script
 
 set -euo pipefail
+set -m  # enable job control so jobs -p works
 
 readonly SCRIPT_NAME="$(basename "$0")"
 readonly WORK_DIR="$(pwd)"  # current working directory

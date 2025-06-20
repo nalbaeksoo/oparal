@@ -30,6 +30,7 @@ The script scans every directory from `a` to `z` under the specified root. Files
 Start and completion messages are written only to the error log so that the console remains uncluttered.
 
 During execution a progress line appears every 10 seconds. It shows how many tasks have completed, the current CPU and memory usage, how many slave processes are running out of the configured limit, and how many jobs have been forked in total. CPU usage comes from `top -bn1` and memory usage excludes file cache via `/proc/meminfo`. Values below `0.05%` round up to `0.1%`. When finished, a results file named `YYYYMMDD_HHMM_INSTANCE.result.csv` records start time, end time and duration for each file. The instance identifier keeps results from concurrent runs separate.
+Job counts rely on Bash job control so the script enables it internally to keep the running process number accurate.
 
 If result files exist in `.parallel_logs`, the script lists each file and indicates which one achieved the shortest total duration. It then asks whether to reorder tasks using the selected results file (either the one given with `-hist` or the latest file).
 
