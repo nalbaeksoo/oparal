@@ -245,7 +245,7 @@ execute_file() {
     start=$(date +%s)
     echo "[start] $f (instance: $FINAL_INSTANCE_ID, workdir: $WORK_DIR)" | tee -a "$error_log"
     if [[ "$f" == *-sql-* ]]; then
-        if ! sqlplus -S "$sql_user/$sql_pass" < "$f" 2>>"$error_log"; then
+        if ! sqlplus -S "$sql_user/$sql_pass" < "$f" > /dev/null 2>>"$error_log"; then
             status=FAILED
             echo "[error] SQL execution failed for $f" | tee -a "$error_log"
             local errors
