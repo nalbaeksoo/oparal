@@ -83,7 +83,6 @@ readonly FINAL_GLOBAL_LOCK="$GLOBAL_LOCK"
 readonly results="${FINAL_LOG_DIR}/$(date +%Y%m%d_%H%M)_${FINAL_INSTANCE_ID}.result.csv"
 readonly error_log="${FINAL_LOG_DIR}/$(date +%Y%m%d_%H%M)_${FINAL_INSTANCE_ID}.error.log"
 readonly progress_file="${FINAL_LOCK_DIR}/progress_${FINAL_INSTANCE_ID}"
-readonly started_file="${FINAL_LOCK_DIR}/started_${FINAL_INSTANCE_ID}"
 readonly error_file="${FINAL_LOCK_DIR}/errors_${FINAL_INSTANCE_ID}"
 readonly final_pid_file="${FINAL_LOCK_DIR}/${SCRIPT_NAME}.${FINAL_INSTANCE_ID}.pid"
 readonly total_file="${FINAL_LOCK_DIR}/total_${FINAL_INSTANCE_ID}"
@@ -234,18 +233,17 @@ progress_monitor() {
     echo "Work directory: $WORK_DIR"
     while true; do
         sleep 10
-        local total completed forked errors cpu mem running workdir_procs
+        local total completed errors cpu mem running workdir_procs
         total=$(cat "$total_file" 2>/dev/null || echo "0")
         completed=$(cat "$progress_file" 2>/dev/null || echo "0")
-        forked=$(cat "$started_file" 2>/dev/null || echo "0")
         errors=$(cat "$error_file" 2>/dev/null || echo "0")
         read cpu mem < <(get_system_usage)
         running=$(get_instance_processes)
         workdir_procs=$(get_workdir_script_processes)
-        printf "[%s] Progress: %d/%d (%d%%) CPU:%.1f%% MEM:%d%% Running:%d/%d Forked:%d WorkDir:%d ERR:%d\n" \
+        printf "[%s] Progress: %d/%d (%d%%) CPU:%.1f%% MEM:%d%% Running:%d/%d WorkDir:%d ERR:%d\n" \
                "$FINAL_INSTANCE_ID" "$completed" "$total" \
                "$([ "$total" -gt 0 ] && echo $(( completed * 100 / total )) || echo "100")" \
-               "$cpu" "$mem" "$running" "$max_processes" "$forked" "$workdir_procs" "$errors"
+               "$cpu" "$mem" "$running" "$max_processes" "$workdir_procs" "$errors"
     done
 }
 
@@ -321,7 +319,7 @@ cleanup() {
     pkill -9 -P $$ 2>/dev/null || true
     wait 2>/dev/null || true
 
-    rm -f "$progress_file" "$started_file" "$error_file" "$total_file" "${results}.lock"
+    rm -f "$progress_file" "$error_file" "$total_file" "${results}.lock"
     rm -f "${FINAL_LOCK_DIR}"/file_${FINAL_INSTANCE_ID}_*.lock
     rm -f "$final_pid_file"
     if [ -f "$results" ]; then
@@ -382,7 +380,6 @@ validate_inputs
 get_password
 
 echo "0" > "$progress_file"
-echo "0" > "$started_file"
 echo "0" > "$error_file"
 echo "0" > "$total_file"
 echo "directory,file,start,end,duration,status,instance,workdir" > "$results"
@@ -476,8 +473,6 @@ for dir in $(find "$root_dir" -maxdepth 1 -type d -regex '.*/[a-z]' | sort); do
             fi
             sleep 1
         done
-        started=$(cat "$started_file" 2>/dev/null || echo "0")
-        echo $((started + 1)) > "$started_file"
         execute_file "$f" &
         sleep 0.5
     done
