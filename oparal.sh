@@ -5,7 +5,8 @@ set -euo pipefail
 
 readonly SCRIPT_NAME="$(basename "$0")"
 readonly WORK_DIR="$(pwd)"  # current working directory
-readonly INSTANCE_ID="${USER:-$(id -un)}_$(hostname)_$$_$(date +%s%N)"
+readonly MAIN_PID=$$
+readonly INSTANCE_ID="${USER:-$(id -un)}_$(hostname)_${MAIN_PID}_$(date +%s%N)"
 
 # Per-work-directory paths
 readonly LOCK_DIR="${WORK_DIR}/.parallel_locks"
@@ -112,7 +113,7 @@ else
 fi
 
 # Write PID file for instance tracking
-echo $$ > "$final_pid_file"
+echo "$MAIN_PID" > "$final_pid_file"
 
 if [ -n "$selected_results" ] && [ -f "$selected_results" ]; then
     while IFS=',' read -r d f s e dur rest; do
@@ -204,8 +205,32 @@ get_workdir_script_processes() {
     echo "$total"
 }
 
+get_instance_processes() {
+    local cnt
+    cnt=$(pgrep -P "$MAIN_PID" 2>/dev/null | wc -l)
+    cnt=$((cnt > 0 ? cnt-1 : 0))
+    echo "$cnt"
+}
+
 get_cpu_usage() {
-    awk '/^cpu /{idle=$5; tot=$2+$3+$4+$5+$6+$7+$8+$9+$10; print int(100 - idle*100/tot)}' /proc/stat 2>/dev/null || echo "0"
+  local l1 l2 idle1 idle2 total1 total2 diff_idle diff_total
+  read -r l1 < /proc/stat || { echo 0; return; }
+  sleep 0.1
+  read -r l2 < /proc/stat || { echo 0; return; }
+  idle1=$(awk '{print $5}' <<< "$l1")
+  idle2=$(awk '{print $5}' <<< "$l2")
+  total1=$(awk '{for(i=2;i<=NF;i++) s+=$i; print s}' <<< "$l1")
+  total2=$(awk '{for(i=2;i<=NF;i++) s+=$i; print s}' <<< "$l2")
+  diff_idle=$((idle2-idle1))
+  diff_total=$((total2-total1))
+  [ "$diff_total" -le 0 ] && diff_total=1
+  local pct
+  pct=$(awk -v i=$diff_idle -v t=$diff_total 'BEGIN{printf "%.2f", (1 - i/t)*100}')
+  if [ "$pct" = "0.00" ]; then
+    echo "0.1"
+  else
+    awk -v p="$pct" 'BEGIN{printf "%.1f", p}'
+  fi
 }
 
 get_mem_usage() {
@@ -224,8 +249,7 @@ progress_monitor() {
         errors=$(cat "$error_file" 2>/dev/null || echo "0")
         cpu=$(get_cpu_usage)
         mem=$(get_mem_usage)
-        running=$(jobs -r 2>/dev/null | wc -l)
-        running=$(( running > 0 ? running-1 : 0 ))
+        running=$(get_instance_processes)
         workdir_procs=$(get_workdir_script_processes)
         printf "[%s] Progress: %d/%d (%d%%) CPU:%d%% MEM:%d%% Local:%d WorkDir:%d ERR:%d\n" \
                "$FINAL_INSTANCE_ID" "$completed" "$total" \
@@ -451,8 +475,7 @@ for dir in $(find "$root_dir" -maxdepth 1 -type d -regex '.*/[a-z]' | sort); do
         while true; do
             cpu=$(get_cpu_usage)
             mem=$(get_mem_usage)
-            running=$(jobs -r 2>/dev/null | wc -l)
-            running=$(( running > 0 ? running-1 : 0 ))
+            running=$(get_instance_processes)
             limit_procs=$(get_workdir_script_processes)
             if [ "$cpu" -lt "$cpu_threshold" ] && \
                [ "$mem" -lt "$mem_threshold" ] && \
