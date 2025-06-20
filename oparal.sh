@@ -241,10 +241,10 @@ progress_monitor() {
         read cpu mem < <(get_system_usage)
         running=$(get_instance_processes)
         workdir_procs=$(get_workdir_script_processes)
-        printf "[%s] Progress: %d/%d (%d%%) CPU:%.1f%% MEM:%d%% Local:%d WorkDir:%d ERR:%d\n" \
+        printf "[%s] Progress: %d/%d (%d%%) CPU:%.1f%% MEM:%d%% Running:%d/%d Forked:%d WorkDir:%d ERR:%d\n" \
                "$FINAL_INSTANCE_ID" "$completed" "$total" \
                "$([ "$total" -gt 0 ] && echo $(( completed * 100 / total )) || echo "100")" \
-               "$cpu" "$mem" "$running" "$workdir_procs" "$errors"
+               "$cpu" "$mem" "$running" "$max_processes" "$forked" "$workdir_procs" "$errors"
     done
 }
 
