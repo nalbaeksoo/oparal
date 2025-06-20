@@ -286,16 +286,22 @@ cleanup() {
 
     if [ -n "${mon_pid:-}" ]; then
         kill "$mon_pid" 2>/dev/null || true
+        pkill -P "$mon_pid" 2>/dev/null || true
         sleep 1
         kill -9 "$mon_pid" 2>/dev/null || true
+        pkill -9 -P "$mon_pid" 2>/dev/null || true
     fi
 
-    local bg_pids="$(jobs -p)"
-    if [ -n "$bg_pids" ]; then
-        kill $bg_pids 2>/dev/null || true
-        sleep 1
-        kill -9 $bg_pids 2>/dev/null || true
-    fi
+    local pid
+    for pid in $(jobs -p); do
+        kill "$pid" 2>/dev/null || true
+        pkill -P "$pid" 2>/dev/null || true
+    done
+    sleep 1
+    for pid in $(jobs -p); do
+        kill -9 "$pid" 2>/dev/null || true
+        pkill -9 -P "$pid" 2>/dev/null || true
+    done
 
     pkill -9 -P $$ 2>/dev/null || true
     wait 2>/dev/null || true

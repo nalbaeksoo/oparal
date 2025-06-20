@@ -28,4 +28,6 @@ During execution a progress line appears every 10 seconds showing completed perc
 
 If result files exist in `.parallel_logs`, the script lists each file and indicates which one achieved the shortest total duration. It then asks whether to reorder tasks using the selected results file (either the one given with `-hist` or the latest file).
 
-Pressing `Ctrl+C` stops the script and all slave processes thanks to a cleanup routine that kills each background job and the progress monitor.
+Pressing `Ctrl+C` stops the script and all slave processes. The cleanup routine
+terminates the progress monitor and every background job along with all of their
+child processes so no SQL*Plus tasks or sleeps remain running.
