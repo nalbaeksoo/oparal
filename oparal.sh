@@ -215,20 +215,16 @@ get_instance_processes() {
 }
 
 get_system_usage() {
-  local data line idle total used cache
+  local data line idle mem_total mem_avail
   data=$(COLUMNS=512 LC_ALL=C top -bn1 | head -n 5 2>/dev/null)
   line=$(grep -m1 "Cpu" <<< "$data")
   idle=$(awk -F',' '{for(i=1;i<=NF;i++) if($i~/%?id/){gsub(/[^0-9.]/,"",$(i)); idle=$(i)}} END{print idle+0}' <<< "$line")
   cpu=$(awk -v id="$idle" 'BEGIN{printf "%.1f", 100-id}')
-  line=$(grep -m1 "Mem" <<< "$data")
-  line=$(echo "$line" | tr ',' ' ')
-  total=$(awk '{for(i=1;i<=NF;i++) if($i=="total") {print $(i-1); exit}}' <<< "$line")
-  used=$(awk '{for(i=1;i<=NF;i++) if($i=="used") {print $(i-1); exit}}' <<< "$line")
-  cache=$(awk '{for(i=1;i<=NF;i++) if($i=="buff/cache") {print $(i-1); exit}}' <<< "$line")
-  [ -z "$total" ] && total=1
-  [ -z "$used" ] && used=0
-  [ -z "$cache" ] && cache=0
-  mem=$(awk -v u="$used" -v c="$cache" -v t="$total" 'BEGIN{printf "%d", ((u+c)/t)*100}')
+  mem_total=$(awk '/MemTotal/{print $2}' /proc/meminfo 2>/dev/null)
+  mem_avail=$(awk '/MemAvailable/{print $2}' /proc/meminfo 2>/dev/null)
+  [ -z "$mem_total" ] && mem_total=1
+  [ -z "$mem_avail" ] && mem_avail=0
+  mem=$(awk -v t="$mem_total" -v a="$mem_avail" 'BEGIN{printf "%d", ((t-a)/t)*100}')
   echo "$cpu $mem"
 }
 
