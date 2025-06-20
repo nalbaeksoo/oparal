@@ -283,14 +283,23 @@ execute_file() {
 
 cleanup() {
     echo "Cleaning up instance: $FINAL_INSTANCE_ID (workdir: $WORK_DIR)"
+
     if [ -n "${mon_pid:-}" ]; then
-        kill -- -$mon_pid 2>/dev/null || kill "$mon_pid" 2>/dev/null || true
+        kill "$mon_pid" 2>/dev/null || true
+        sleep 1
+        kill -9 "$mon_pid" 2>/dev/null || true
     fi
-    for j in $(jobs -p); do
-        kill -- -$j 2>/dev/null || kill "$j" 2>/dev/null || true
-    done
-    pkill -P $$ 2>/dev/null || true
+
+    local bg_pids="$(jobs -p)"
+    if [ -n "$bg_pids" ]; then
+        kill $bg_pids 2>/dev/null || true
+        sleep 1
+        kill -9 $bg_pids 2>/dev/null || true
+    fi
+
+    pkill -9 -P $$ 2>/dev/null || true
     wait 2>/dev/null || true
+
     rm -f "$progress_file" "$started_file" "$error_file" "$total_file" "${results}.lock"
     rm -f "${FINAL_LOCK_DIR}"/file_${FINAL_INSTANCE_ID}_*.lock
     rm -f "$final_pid_file"
